@@ -57,6 +57,17 @@ const processPayload = async (payload, res) => {
           //Message is form Private Channel
           console.log("Ticket found via im channel and threadTs ", threadTs);
 
+          // Sending conversation to PSA
+          const user = await userRepository.findByUserId(userId);
+          const payload = {
+            email: user.email,
+            message: messageText,
+          };
+          await axios.post(
+            `http://localhost:8081/ticket/${ticket.id}/reply`,
+            payload
+          );
+
           // Sending to Public Channel
           const response = await outgoingService.postMessage(
             imChannel.publicChannelId,
@@ -66,29 +77,14 @@ const processPayload = async (payload, res) => {
             process.env.BOT_ACCESS_TOKEN
           );
 
-          const ticketDetails = await axios.get(
-            `http://localhost:8081/tickets/${ticket.id}`
-          );
-          console.log("Technician ", ticketDetails.data.technician);
-          const technician = await userRepository.findByEmail(
-            ticketDetails.data.technician
-          );
-
-          // Sending conversation to PSA
-          const user = await userRepository.findByUserId(userId);
-          const payload = {
-            email: user.email,
-            message: messageText
-          }
-          await axios.post(
-            `http://localhost:8081/ticket/${ticket.id}/reply`,
-            payload
-          );
           console.log("Response from Agent Channel Message ", response);
           return;
         }
 
-        console.log("Ticket not found via private channel and threadTs ", threadTs);
+        console.log(
+          "Ticket not found via private channel and threadTs ",
+          threadTs
+        );
         const ticketByChannel = await ticketRepository.findByPrivateChannelId(
           channelId
         );

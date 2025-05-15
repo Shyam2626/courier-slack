@@ -1,6 +1,6 @@
 const { Ticket } = require('../config/db');
 const { Op, where } = require('sequelize');
-const ticket = require('../src/models/ticket');
+const ticket = require('../models/ticket');
 
 const createTicket = async (ticketId, userId, channelId, messageTs) => {
   const ticket = await Ticket.create({
@@ -11,7 +11,7 @@ const createTicket = async (ticketId, userId, channelId, messageTs) => {
   });
   console.log(`Created ticket ${ticket.id} for user ${userId}`);
   return ticket;
-};
+}; // todo
 
 const findByPrivateChannelId = async (channelId) => {
   return await Ticket.findOne({
@@ -45,7 +45,7 @@ const findByTechnicianThreadTs = async (threadTs) => {
   return await Ticket.findOne({
     where: { technicianThreadTs: threadTs }
   });
-};
+}; // todo
 
 const findById = async (ticketId) => {
   return await Ticket.findOne({

@@ -1,18 +1,28 @@
-const express = require("express");
-const router = express.Router();
-
 const slackService = require('../service/slackService');
 const slackPrivateChannelService = require('../service/slackPrivateChannelService');
 
-router.post("/api/sendReply", async (req, res) => {
-  const { ticketId, message, email } = req.body;
-  await slackService.replyMessage(ticketId, message, email);
-  res.status(200).json({ success: true });
-});
+module.exports = function (server) {
+  // POST /api/sendReply
+  server.post("/api/sendReply", async (req, res) => {
+    try {
+      const { ticketId, message, email } = req.body;
+      await slackService.replyMessage(ticketId, message, email);
+      res.send(200, { success: true });
+    } catch (error) {
+      console.error("Error in /api/sendReply:", error);
+      res.send(500, { success: false, error: error.message });
+    }
+  });
 
-router.post('/initiateConversation', async (req, res) => {
-  const {ticketId, requesterEmail, technicianEmail} = req.body;
-  slackPrivateChannelService.createPrivateChannel(ticketId, technicianEmail);
-})
-
-module.exports = router;
+  // POST /initiateConversation
+  server.post("/initiateConversation", async (req, res) => {
+    try {
+      const { ticketId, requesterEmail, technicianEmail } = req.body;
+      await slackPrivateChannelService.createPrivateChannel(ticketId, technicianEmail);
+      res.send(200, { success: true });
+    } catch (error) {
+      console.error("Error in /initiateConversation:", error);
+      res.send(500, { success: false, error: error.message });
+    }
+  });
+};

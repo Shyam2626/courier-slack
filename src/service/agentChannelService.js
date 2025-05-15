@@ -3,8 +3,9 @@ const outgoingService = require("./outgoingService");
 const jsonParserService = require("./jsonParserService");
 const userRepository = require("../repository/userRepository");
 const mirroredMessages = new Map();
+const blockService = require('./blockService');
 
-async function sendMessageToAgentChannel(ticket, userId, messageText) {
+async function sendMessageToAgentChannel(ticket, userId, messageText, ticketInfo) {
   try {
     const imChannelPublicToPrivate =
       await imChannelPublicToPrivateRepository.findByPublicChannelId(
@@ -19,7 +20,7 @@ async function sendMessageToAgentChannel(ticket, userId, messageText) {
     const ticketThreadTs = await getOrCreateTicketThreadInChannel(
       ticket,
       imChannelPublicToPrivate.privateChannelId,
-      messageText
+      ticketInfo
     );
     const response = await outgoingService.postMessage(
       imChannelPublicToPrivate.privateChannelId,
@@ -41,87 +42,71 @@ async function sendMessageToAgentChannel(ticket, userId, messageText) {
   }
 }
 
-async function getOrCreateTicketThreadInChannel(ticket, channelId, subject) {
+async function getOrCreateTicketThreadInChannel(ticket, channelId, ticketInfo) {
   if (ticket.technicianChannelConversationId)
     return ticket.technicianChannelConversationId;
-  const requester = await userRepository.findByUserId(ticket.requester);
-  const technicianCard = [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: [
-          `🎫 *Ticket Id:* #${ticket.id}`,
-          `*Subject:* ${subject}`,
-          `*Requester:* ${requester.name}`,
-          `*Created:* ${new Date().toUTCString()}`,
-          `*Technician:* ${"Unassigned"}`,
-          `*Status:* ${null}`,
-        ].join("\n"),
-      },
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Update",
-          },
-          action_id: "update_ticket",
-          value: ticket.id.toString(),
-        },
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Close",
-          },
-          style: "danger",
-          action_id: "close_ticket",
-          value: ticket.id.toString(),
-        },
-      ],
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Initiate Conversation",
-          },
-          action_id: "add_members",
-          value: ticket.id.toString(),
-        },
-      ],
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Add Note",
-          },
-          action_id: "add_note",
-          value: ticket.id.toString(),
-        },
-      ],
-    },
-  ];
+  
+  const requester = await userRepository.findByEmail(ticketInfo.data.email);
+  const technicianChannelCard = await blockService.getTicketChannelBlock(ticket, ticketInfo, requester.name, null);
+
+  // const technicianCard = [
+  //   {
+  //     type: "section",
+  //     text: {
+  //       type: "mrkdwn",
+  //       text: [
+  //         `🎫 *Ticket Id:* #${ticket.id}`,
+  //         `*Subject:* ${ticketInfo.data.subject}`,
+  //         `*Requester:* ${requester.name}`,
+  //         `*Created:* ${new Date().toUTCString()}`,
+  //         `*Technician:* ${"Unassigned"}`,
+  //         `*Status:* ${null}`,
+  //       ].join("\n"),
+  //     },
+  //   },
+  //   {
+  //     type: "actions",
+  //     elements: [
+  //       {
+  //         type: "button",
+  //         text: {
+  //           type: "plain_text",
+  //           text: "Private Group",
+  //         },
+  //         action_id: "add_members",
+  //         value: ticket.id.toString(),
+  //       },
+  //       {
+  //         type: "button",
+  //         text: {
+  //           type: "plain_text",
+  //           text: "Take Action",
+  //         },
+  //         action_id: "take_action_expand",
+  //         value: ticket.id.toString(),
+  //       },
+  //       {
+  //         type: "button",
+  //         text: {
+  //           type: "plain_text",
+  //           text: "Assign Ticket",
+  //         },
+  //         action_id: "assign_ticket_expand",
+  //         value: ticket.id.toString(),
+  //       },
+  //     ],
+  //   },
+  // ];
 
   const response = await outgoingService.postBlockMessage(
     channelId,
-    technicianCard,
+    technicianChannelCard,
     null,
     process.env.BOT_ACCESS_TOKEN
   );
+  console.log("Response ", response.data)
+  const threadTs = await jsonParserService.extractThreadTs(response.data);
 
-  const threadTs = await jsonParserService.extractThreadTs(response);
   if (threadTs) {
     ticket.technicianChannelConversationId = threadTs;
     await ticket.save();

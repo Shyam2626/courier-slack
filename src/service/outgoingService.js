@@ -1,5 +1,6 @@
 const axios = require("axios");
 const userRepository = require('../repository/userRepository');
+const jsonParserService = require('../service/jsonParserService');
 
 async function postMessage(channelId, userId, message, threadTs, token) {
   try {
@@ -7,8 +8,8 @@ async function postMessage(channelId, userId, message, threadTs, token) {
     const payload = {
       channel: channelId,
       text: message,
-      username: user.name || "Unknown-User",
-      icon_url: user.imageUrl
+      username: user?.name ?? "Technician",
+      icon_url: user?.imageUrl
     };
 
     if (threadTs) {
@@ -43,7 +44,6 @@ async function postBlockMessage(channelId, blocks, threadTs, token) {
     blocks,
   };
   if (threadTs) body.thread_ts = threadTs;
-
   const response = await axios.post(
     "https://slack.com/api/chat.postMessage",
     body,
@@ -54,7 +54,8 @@ async function postBlockMessage(channelId, blocks, threadTs, token) {
       },
     }
   );
-  return response.data;
+
+  return response;
 }
 
 async function updateBlocksMessage(channel, ts, blocks, token) {

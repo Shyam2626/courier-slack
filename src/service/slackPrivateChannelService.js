@@ -4,24 +4,21 @@ const userRepository = require("../repository/userRepository");
 
 async function createPrivateChannel(ticketId, technicianEmail) {
   try {
+
+      const ticketInfo = await axios.get(
+        `http://localhost:8081/tickets/${ticketId}`
+      );
+    const technician = await userRepository.findByEmail(ticketInfo.data.technician);
+    if (!technician) {
+      console.warn("Technician Not found for the ticket: ", ticketId);
+      return;
+    }
     const channelName = `ticket-${ticketId}`;
     const channelId = await createChannel(channelName);
     if (channelId) {
       const ticket = await ticketRepository.findById(ticketId);
-      if (!technicianEmail) {
-        const ticketInfo = await axios.get(
-          `http://localhost:8081/tickets/${ticketId}`
-        );
-        technicianEmail = ticketInfo.data.technician;
-      }
-      const technician = await userRepository.findByEmail(
-        technicianEmail
-      );
-      if (!technician) {
-        console.warn("Technician Not found for the ticket: ", ticketId);
-        return;
-      }
-      await addUsersToChannel(channelId, [ticket.requester, technician.userId]);
+      const requester = await userRepository.findByEmail(ticketInfo.data.email);
+      await addUsersToChannel(channelId, [requester.userId, technician.userId]);
       await addBotToChannel(channelId);
       ticket.privateChannelId = channelId;
       await ticketRepository.save(ticket);

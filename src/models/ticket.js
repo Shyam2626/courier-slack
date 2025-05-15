@@ -29,6 +29,9 @@ module.exports = (sequelize) => {
       privateChannelId: {
         type: DataTypes.STRING,
       },
+      requesterChannelBlockThreadTs: {
+        type: DataTypes.STRING,
+      },
     },
     {
       tableName: "Ticket",

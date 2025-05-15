@@ -5,46 +5,30 @@ const ticketRepository = require("../repository/ticketRepository");
 
 async function openUpdateTicketCard(ticketId, triggerId) {
   const technicians = await getTechnicians();
-  const ticketUpdateFields = await getTicketUpdateFields(ticketId);
+  // const ticketUpdateFields = await getTicketUpdateFields(ticketId);
   const response = await openCard(
     triggerId,
     ticketId,
     technicians,
-    ticketUpdateFields
+    // ticketUpdateFields
   );
 }
 
-async function updateTicket(payload, ticketAction) {
+
+async function updateTicket(ticketId, email, priority, status) {
   try {
-    if (ticketAction === "UPDATE_TICKET") {
-      const { ticketId, technicianEmail, priority, status } =
-        await jsonParserService.parseUpdateTicketPayload(payload);
-      const updateTicketRequestModel = {
-        ticketId: ticketId,
-        technician: technicianEmail,
-        priority: priority,
-        status: status,
-      };
-      const ticketInfo = await axios.post(
-        "http://localhost:8081/update-ticket",
-        updateTicketRequestModel
-      );
-      const ticket = await ticketRepository.findById(ticketId);
-      // await slackService.notifyTechnician(ticket, ticketInfo);
-      await slackService.updateTechnicianChannelTicketCard(ticket, ticketInfo);
-    } else if (ticketAction === "CLOSE_TICKET") {
-      const ticketId = await jsonParserService.getTicketId(payload);
-      const updateTicketRequestModel = {
-        ticketId: ticketId,
-        status: "CLOSED",
-      };
-      const ticketInfo = await axios.post(
-        "http://localhost:8081/update-ticket",
-        updateTicketRequestModel
-      );
-      const ticket = await ticketRepository.findById(ticketId);
-      await slackService.updateTechnicianChannelTicketCard(ticket, ticketInfo);
-    }
+    const updateTicketRequestModel = {
+      ticketId: ticketId,
+      technician: email,
+      priority: priority,
+      status: status,
+    };
+    const ticketInfo = await axios.post(
+      "http://localhost:8081/update-ticket",
+      updateTicketRequestModel
+    );
+    const ticket = await ticketRepository.findById(ticketId);
+    await slackService.updateChannelCards(ticket, ticketInfo);
   } catch (err) {
     console.log(`Error in Updating Ticket ${err}`);
   }
@@ -75,17 +59,6 @@ async function openCard(triggerId, ticketId, technicians, ticketUpdateFields) {
         type: "plain_text",
         text: "Select Technician",
       },
-      // element: {
-      //   type: "static_select",
-      //   action_id: "technician_select",
-      //   options: technicians.map((technician) => ({
-      //     text: {
-      //       type: "plain_text",
-      //       text: technician.name,
-      //     },
-      //     value: technician.email.toString(),
-      //   })),
-      // },
       element: {
         type: "static_select",
         action_id: "technician_select",
@@ -99,12 +72,15 @@ async function openCard(triggerId, ticketId, technicians, ticketUpdateFields) {
         initial_option: {
           text: {
             type: "plain_text",
-            text: ticketUpdateFields.find(f => f.name === 'technician')?.value?.name || technicians[0].name,
+            text:
+              ticketUpdateFields.find((f) => f.name === "technician")?.value
+                ?.name || technicians[0].name,
           },
-          value: ticketUpdateFields.find(f => f.name === 'technician')?.value?.email || technicians[0].email,
-        }
-      }
-      
+          value:
+            ticketUpdateFields.find((f) => f.name === "technician")?.value
+              ?.email || technicians[0].email,
+        },
+      },
     },
   ];
 
@@ -183,4 +159,4 @@ function capitalize(string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-module.exports = { openUpdateTicketCard, updateTicket };
+module.exports = { openUpdateTicketCard, updateTicket, getTechnicians };

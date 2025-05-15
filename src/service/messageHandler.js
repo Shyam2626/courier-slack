@@ -3,6 +3,7 @@ const userRepository = require("../repository/userRepository");
 const outgoingService = require("./outgoingService");
 const agentChannelService = require("./agentChannelService");
 const slackService = require("./slackService");
+const jsonParserService = require("./jsonParserService");
 const axios = require("axios");
 
 async function handlePrivateChannelMessage(
@@ -19,15 +20,6 @@ async function handlePrivateChannelMessage(
       console.log(
         `Found ticket id: ${ticket.id} for private channel: ${channelId}`
       );
-      const ticketInfo = await axios.get(
-        `http://localhost:8081/tickets/${ticket.id}`
-      );
-      console.log("Technician ", ticketInfo.data.technician);
-      const technician = await userRepository.findByEmail(
-        ticketInfo.data.technician
-      );
-      const isFromAssignee = userId === technician.id;
-      console.log(`Message is from assignee: ${isFromAssignee}`);
       const user = await userRepository.findByUserId(userId);
       const payload = {
         email: user.email,
@@ -38,12 +30,12 @@ async function handlePrivateChannelMessage(
         payload
       );
 
-      await relayMessageFromPrivateChannel(
-        messageText,
-        ticket,
-        isFromAssignee,
-        userId
-      );
+      // await relayMessageFromPrivateChannel(
+      //   messageText,
+      //   ticket,
+      //   isFromAssignee,
+      //   userId
+      // );
     } else {
       await handleChannelMessage(
         userId,
@@ -70,31 +62,21 @@ async function handleThreadReply(
     `Message received - userId: ${userId}, channelId: ${channelId}, teamId: ${teamId}, message: ${messageText}`
   );
 
-  let lookupMethod = "";
-  let ticket = await ticketRepository.findByRequesterThreadTs(threadTs);
-  if (ticket && threadTs) {
-    lookupMethod = "requester";
-    console.log(
-      `Ticket by threadTs/teamId: ${ticket ? ticket.id : "not found"}`
-    );
-  }
+  const ticket = await ticketRepository.findByRequesterThreadTs(threadTs);
 
-  if (!ticket && threadTs) {
-    ticket = await ticketRepository.findByTechnicianThreadTs(threadTs);
-    if (ticket) {
-      lookupMethod = "technician";
-      console.log(
-        `Ticket by assigneeThreadTs/teamId: ${ticket ? ticket.id : "not found"}`
-      );
-    }
-  }
+  // if (!ticket && threadTs) {
+  //   ticket = await ticketRepository.findByTechnicianThreadTs(threadTs);
+  //   if (ticket) {
+  //     lookupMethod = "technician";
+  //     console.log(
+  //       `Ticket by assigneeThreadTs/teamId: ${ticket ? ticket.id : "not found"}`
+  //     );
+  //   }
+  // }
 
   if (ticket) {
-    console.log(`Found ticket id: ${ticket.id} using method: ${lookupMethod}`);
+    console.log(`Found ticket id: ${ticket.id}`);
 
-    let isFromAssignee = lookupMethod === "technician";
-
-    console.log(`From assignee: ${isFromAssignee}`);
     const user = await userRepository.findByUserId(userId);
     const payload = {
       email: user.email,
@@ -105,18 +87,19 @@ async function handleThreadReply(
       payload
     );
 
-    await slackService.relayMessage(
-      messageText,
-      ticket,
-      isFromAssignee,
-      userId
-    );
-
-    // await agentChannelService.sendMessageToAgentChannel(
+    // await slackService.relayMessage(
+    //   messageText,
     //   ticket,
-    //   userId,
-    //   messageText
+    //   isFromAssignee,
+    //   userId
     // );
+
+    //techician send message from help channel
+    await agentChannelService.sendMessageToAgentChannel(
+      ticket,
+      userId,
+      messageText
+    );
   } else {
     console.log(
       `No matching ticket found for channelId: ${channelId} or threadTs: ${threadTs}`
@@ -173,64 +156,35 @@ async function handleChannelMessage(
     email: user.email,
   };
 
-  const res = await axios.post(
+  const ticketInfo = await axios.post(
     `http://localhost:8081/create-ticket`,
     ticketRequest
   );
-  console.log("Ticket", res.data);
-
+  console.log("Ticket", ticketInfo.data);
   const ticket = await ticketRepository.createTicket(
-    res.data,
+    ticketInfo.data.id,
     userId,
     channelId,
     eventTs
   );
-
-  const requesterChannelBlocks = [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `✅ Your issue is registered.\n*Ticket ID:* ${ticket.id}`,
-      },
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Update",
-          },
-          action_id: "update_ticket",
-          value: ticket.id.toString(),
-        },
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Close",
-          },
-          style: "danger",
-          action_id: "close_ticket",
-          value: ticket.id.toString(),
-        },
-      ],
-    },
-  ];
-
-  await outgoingService.postBlockMessage(
+  const requesterChannelBlocks =
+    await slackService.getRequesterChannelTicketCardBlock(ticket, ticketInfo);
+  const response = await outgoingService.postBlockMessage(
     channelId,
     requesterChannelBlocks,
     eventTs,
     process.env.BOT_ACCESS_TOKEN
   );
-
+  const requesterChannelBlockThreadTs = await jsonParserService.extractThreadTs(
+    response.data
+  );
+  ticket.requesterChannelBlockThreadTs = requesterChannelBlockThreadTs;
+  ticketRepository.save(ticket);
   await agentChannelService.sendMessageToAgentChannel(
     ticket,
     userId,
-    messageText
+    messageText,
+    ticketInfo
   );
 }
 
